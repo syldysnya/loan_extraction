@@ -131,7 +131,9 @@ No prompts or responses are stored.
 
 `extract(document, pages, model) -> DocumentExtraction`
 
-- Up to 3 attempts. An attempt fails on an API error, output that fails validation, or a cited line number that doesn't exist in the document.
+- Up to 3 attempts. An attempt fails on an API error, output that fails validation, or a cited line number that doesn't exist in the document. The line check runs inside Pydantic validation (`CitationContext` as validation context), so it is recorded in `llm_calls` like any invalid output.
+- After a valid answer, `remove_ssn_like_accounts` drops account numbers shaped like an SSN (`ddd-dd-dddd`, also masked) and logs their field paths. Bare 9-digit numbers are kept: real account numbers look like that too.
+- `ssn_last4` always keeps the last 4 digits only, even if the model returns a full or masked SSN.
 - After the 3rd failure, raises `ExtractionFailed`.
 
 ## Errors

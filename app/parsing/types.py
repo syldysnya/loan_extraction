@@ -5,6 +5,8 @@ from typing import ClassVar
 
 from pydantic import BaseModel
 
+from app.errors import NonRetryableError
+
 
 class MimeType(StrEnum):
     PDF = "application/pdf"
@@ -12,7 +14,7 @@ class MimeType(StrEnum):
     JPEG = "image/jpeg"
 
 
-class UnsupportedFileType(Exception):
+class UnsupportedFileType(NonRetryableError):
     pass
 
 
