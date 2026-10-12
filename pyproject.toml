@@ -6,7 +6,7 @@ build-backend = "hatchling.build"
 name = "loan-extraction"
 version = "0.1.0"
 requires-python = ">=3.12"
-dependencies = ["hydra-core>=1.3", "pydantic>=2"]
+dependencies = ["hydra-core>=1.3", "pydantic>=2", "filetype>=1.2"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["app"]
@@ -24,6 +24,7 @@ fmt = ["ruff check --fix .", "ruff format ."]
 
 [tool.ruff]
 line-length = 120
+extend-exclude = ["docs"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I"]
