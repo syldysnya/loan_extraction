@@ -15,6 +15,7 @@ class Stage(StrEnum):
     INGEST = "ingest"
     WORKER = "worker"
     REDRIVE = "redrive"
+    RESOLVE = "resolve"
 
 
 @dataclass
