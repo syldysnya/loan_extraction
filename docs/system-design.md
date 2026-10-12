@@ -31,7 +31,7 @@ This system extracts unstructured borrower data from a corpus of loan documents 
 ```mermaid
 flowchart LR
     upload["Upload (CLI)"]
-    s3[("S3 (local folder)<br/>s3/input/{batch_id}/")]
+    s3[("S3 (local folder)<br/>s3/input/{batch_id}/<br/>s3/pages/{document_id}/")]
     sqs[["Local SQS"]]
     dlq[["DLQ"]]
     worker["<b>Document worker</b>"]
@@ -45,6 +45,7 @@ flowchart LR
     s3 -- "file event" --> sqs
     sqs -- "consume" --> worker
     sqs -- "if failed" --> dlq
+    worker -- "page images" --> s3
     worker -- "prompt + JSON schema" --> llm
     worker -- "fields, status<br/>queued → processing → done | failed" --> db
     api -- "read" --> db
