@@ -171,6 +171,20 @@ Prompts live in their own module, as named constants with builder functions:
 - `ssn_last4` always keeps the last 4 digits only, even if the model returns a full or masked SSN.
 - After the 3rd failure, raises `ExtractionFailed`.
 
+## Value verification (planned: PR 4)
+
+After validation, code checks that each value appears in the lines it cites (`LineIndex.resolve(ref).quote`):
+
+| Value | Found if |
+| --- | --- |
+| Income amount | The amount appears with or without thousands separators, to the cent or to the dollar (`117,040.19`, `117040.19`, `117,040`) |
+| Account / loan number | Its digits and letters appear, ignoring spaces and dashes |
+| SSN last 4 | The 4 digits appear |
+| Name | Every part of the name appears (case-insensitive) |
+| Address | Not checked: addresses are often split over several lines and abbreviated |
+
+A value that isn't found makes the answer invalid: it raises a `ValidationError` with the value's field path, so it goes through the existing retry-with-feedback loop (`... .amount: value not found in the cited lines`). Messages never include the value.
+
 ## Errors
 
 - `NonRetryableError`: a new base class. `UnsupportedFileType` and `ExtractionFailed` extend it. The worker fails these documents at once (no queue retry).
@@ -203,4 +217,5 @@ A re-run of a document replaces its mentions, so retries don't duplicate them.
 | --- | --- | --- |
 | 1. LLM clients + tracking | `Pricing`, `Usage`, `LLMClient`, `GeminiClient`, `OpenAIClient`, Hydra model configs, `TrackedModel`, `llm_calls`, `hatch run costs` | Cost formula; a row per call, including failures; costs totals. Fake client, no network. |
 | 2. Schema + extractor | Schema, `resolve`, request building, `extract` with 3 attempts, `ExtractionFailed`, `NonRetryableError`, `safe_error` | Valid output; unknown line number → retry; retry then success; 3 failures raise; `resolve` returns page, quote and boxes; `safe_error` never contains values |
+| 4. Value verification | Check each value against its cited lines; failures go through retry with feedback | Amount formats found; missing amount, account digits, SSN last 4 or name part rejected with field path and no value; real corpus extracts with no verification failures |
 | 3. Worker wiring | `borrower_mentions`, extraction in `process_document`, `safe_error` in the worker | Worker stores mentions; extraction failure fails at once. End to end on the corpus with both models (needs API keys). |
