@@ -28,4 +28,10 @@ flowchart LR
 | MIME type detected from bytes, not the extension | File names can't be trusted. |
 | `text = null` when a page has no text layer | The scanned Title Report is read from its image. |
 | Page images saved to local S3 | Easy to inspect what the LLM saw; parse and extract can be split later. |
-| Unsupported or broken file raises an error | It retries, then goes to the DLQ like any failure. |
+| Unsupported type fails at once; a broken file retries, then DLQ | A retry cannot change a file type, but may get past a transient error. |
+
+## Production note
+
+Scanned pages have no text layer, so here the multimodal LLM reads them from the page image. That is enough for this project.
+
+In production, scans would first go through OCR such as AWS Textract (text, tables, forms) or Tesseract. The pipeline would then extract from text plus image on every page, which is more reliable and cheaper at volume. It would be one more `Parser`, or a step after parsing that fills `text` for pages where it is `None`. Nothing downstream changes.

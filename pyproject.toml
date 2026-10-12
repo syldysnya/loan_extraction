@@ -6,7 +6,7 @@ build-backend = "hatchling.build"
 name = "loan-extraction"
 version = "0.1.0"
 requires-python = ">=3.12"
-dependencies = ["hydra-core>=1.3", "pydantic>=2", "filetype>=1.2"]
+dependencies = ["hydra-core>=1.3", "pydantic>=2", "filetype>=1.2", "pymupdf>=1.24"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["app"]
@@ -21,6 +21,10 @@ redrive = "python -m app.redrive {args}"
 test = "pytest {args}"
 lint = ["ruff check .", "ruff format --check ."]
 fmt = ["ruff check --fix .", "ruff format ."]
+
+[tool.pytest.ini_options]
+# PyMuPDF's SWIG bindings emit these on import; not ours to fix.
+filterwarnings = ["ignore:builtin type .* has no __module__ attribute:DeprecationWarning"]
 
 [tool.ruff]
 line-length = 120
