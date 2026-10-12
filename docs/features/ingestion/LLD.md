@@ -6,7 +6,7 @@ Hatch scripts, defined in `pyproject.toml`:
 
 ```bash
 hatch run ingest folder=data/loan_data   # upload a batch
-hatch run worker                         # consume the queue
+hatch run document-worker                # consume the queue
 hatch run redrive                        # move DLQ messages back to the queue
 ```
 
