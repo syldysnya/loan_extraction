@@ -2,9 +2,9 @@
 __pycache__/
 *.egg-info/
 .pytest_cache/
-s3/
-queue/
-log/
+/s3/
+/queue/
+/log/
 *.db
 .DS_Store
 data/loan_data/
