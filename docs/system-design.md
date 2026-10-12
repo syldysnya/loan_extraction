@@ -41,12 +41,12 @@ flowchart LR
     client["Client"]
 
     upload -- "upload files" --> s3
-    upload -- "register docs (pending),<br/>sha256 dedupe" --> db
+    upload -- "register docs (queued),<br/>sha256 dedupe" --> db
     s3 -- "file event" --> sqs
     sqs -- "consume" --> worker
     sqs -- "if failed" --> dlq
     worker -- "prompt + JSON schema" --> llm
-    worker -- "fields, status<br/>pending → done | failed" --> db
+    worker -- "fields, status<br/>queued → processing → done | failed" --> db
     api -- "read" --> db
     client -- "request" --> api
 ```
