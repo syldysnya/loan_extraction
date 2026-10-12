@@ -42,7 +42,7 @@ class ConflictField(StrEnum):
 
 class Conflict(BaseModel):
     field: ConflictField
-    key: str                      # what was compared, e.g. "wages, ABC Technologies, 2024-01-01..2024-12-31, period"
+    key: str                      # what was compared, e.g. "wages, ABC Technologies, 2024-01-01..2024-12-31, period, w2"
     values: list[SourcedValue]    # the different values, each with its sources
 
 class BorrowerRecord(BaseModel):
@@ -74,7 +74,7 @@ Within one person, values that are the same are merged into one entry with all t
 | Value | Same if |
 | --- | --- |
 | Name (display) | The most common spelling across mentions |
-| SSN last 4 | Same 4 digits |
+| SSN last 4 | Same 4 digits (sources from extraction's `ssn_source`) |
 | Address | Same kind and same text after lowercasing and dropping punctuation and extra spaces |
 | Account | Same number, keeping only letters and digits |
 | Income | Same amount, kind, basis, period and joint flag, and the payers match or one is missing (as in extraction's duplicate check) |
@@ -88,7 +88,9 @@ No income is summed across documents.
 | Field | Conflict when |
 | --- | --- |
 | `ssn_last4` | A person has more than one value |
-| `income` | Two figures share kind, payer, basis and period but have different amounts |
+| `income` | Two figures from the **same document type** share kind, payer, basis and period but have different amounts |
+
+Only figures from the same document type are compared: different types can measure different things under the same kind (W-2 box 1 wages vs an employment verification's base pay are both `wages` for 2024 from the same employer). Two W-2s that disagree are a conflict.
 
 Each conflict lists every value with its sources. It is logged as `borrower {id}: {field}` only: no values.
 
