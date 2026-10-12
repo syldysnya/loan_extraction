@@ -16,14 +16,14 @@ This system extracts unstructured borrower data from a corpus of loan documents 
 1. Accuracy over speed.
 2. Zero document loss.
 3. Idempotent re-runs.
-4. PII handling.
+4. PII handling: PII leaves the machine only to the LLM provider, on a paid API tier that doesn't train on our data; never in logs.
 
 ## Corpus
 
 `data/loan_data/` contains 10 PDFs about the same household (John and Mary Homeowner):
 
 - **Borrowers span documents.** Some documents cover John only, some cover both, so per-document extractions must be merged into one record per borrower.
-- **One document is scanned.** The Title Report has no text layer, so extraction must be able to read page images.
+- **One document is scanned.** The Title Report has no text layer, so its text comes from OCR (Tesseract), and extraction also sees the page images.
 - **Income history has several sources:** 1040 + Schedule C, W-2, paystub and EVOE.
 
 ## Architecture
@@ -36,7 +36,7 @@ flowchart LR
     dlq[["DLQ"]]
     worker["<b>Document worker</b>"]
     llm["LLM"]
-    db[("<b>SQLite</b><br/>documents<br/>extracted_fields<br/>borrowers")]
+    db[("<b>SQLite</b><br/>documents<br/>borrower_mentions<br/>llm_calls<br/>borrowers")]
     api["<b>Query API (FastAPI)</b><br/>GET /borrowers<br/>GET /borrowers/{id}"]
     client["Client"]
 
@@ -54,7 +54,7 @@ flowchart LR
 
 ## Storage
 
-All state is kept in SQLite: `documents` (ingestion), `extracted_fields` (extraction) and `borrowers` (resolution).
+All state is kept in SQLite: `documents` (ingestion), `borrower_mentions` and `llm_calls` (extraction), and `borrowers` (resolution).
 
 ## Models
 
@@ -62,7 +62,7 @@ The model is selected through Hydra config (`model=<name>`), so both can be run 
 
 | Config | Model 
 | --- | --- 
-| `conf/model/gemini.yaml` | Gemini 3.6 Flash (`gemini-3.6-flash`) 
+| `conf/model/gemini.yaml` | Gemini 3.5 Flash-Lite (`gemini-3.5-flash-lite`) 
 | `conf/model/openai.yaml` | GPT-4o mini (`gpt-4o-mini`) 
 
 Both models accept image input and support JSON schema output.
@@ -83,3 +83,23 @@ Both models accept image input and support JSON schema output.
 - Each run gets its own file: `log/{YYYY-MM-DD}/{HH-MM-SS}/{process}.log`. This is Hydra's run-directory convention.
 - Each line carries `batch_id`, `document_id`, `stage` and `status`.
 - Logs contain IDs only, never PII values.
+
+### PII
+
+| Where | Handling |
+| --- | --- |
+| LLM provider | Receives the document pages. Paid API tier only (no training on our data). |
+| Logs, queue messages, `llm_calls` | IDs, token counts and costs only. No document content, prompts or responses. |
+| Error messages | Error type and field path only, never the value (validation errors would otherwise echo extracted data). |
+| SSN | Only the last 4 digits are extracted. |
+| Query API | Bound to `localhost`. |
+| Git | `data/`, `loan.db`, `s3/`, `queue/` and `log/` are ignored. |
+
+Known gaps, accepted for a local project: SQLite, `s3/` and page images are unencrypted on disk, and file names (which contain borrower names) are stored in `documents.filename` and S3 keys.
+
+In production:
+
+- Encryption at rest (KMS), with field-level encryption or tokenization for sensitive values.
+- Authentication and authorization on the API, and audit logs of who read which borrower.
+- An LLM inside our own cloud boundary (e.g. AWS Bedrock in a VPC), or a zero-data-retention agreement with the provider.
+- Retention rules: delete raw files and page images after extraction.
