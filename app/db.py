@@ -133,10 +133,20 @@ CREATE TABLE IF NOT EXISTS llm_calls (
 PAGES = TypeAdapter(list[Page])
 
 
+WAL_MODE = "PRAGMA journal_mode=WAL"  # readers (the API) and the writer (the worker) don't block each other
+READ_ONLY_URI = "file:{path}?mode=ro"
+
+
 def connect(db_path: str) -> sqlite3.Connection:
     conn = sqlite3.connect(db_path)
+    conn.execute(WAL_MODE)
     conn.executescript(SCHEMA)
     return conn
+
+
+def connect_read_only(db_path: str) -> sqlite3.Connection:
+    """A connection that can't write. WAL mode is stored in the database file, so it applies here too."""
+    return sqlite3.connect(READ_ONLY_URI.format(path=db_path), uri=True)
 
 
 def insert_documents(conn: sqlite3.Connection, documents: list[Document]) -> None:

@@ -16,6 +16,7 @@ class Stage(StrEnum):
     WORKER = "worker"
     REDRIVE = "redrive"
     RESOLVE = "resolve"
+    API = "api"
 
 
 @dataclass
@@ -26,6 +27,7 @@ class LogContext:
     batch_id: str | None = None
     document_id: str | None = None
     status: DocumentStatus | None = None
+    request_id: str | None = None
 
     def extra(self) -> dict[str, "LogContext"]:
         """The `extra=` mapping the logging API expects."""
@@ -47,6 +49,7 @@ class LogLine(BaseModel):
     batch_id: str | None = None
     document_id: str | None = None
     status: DocumentStatus | None = None
+    request_id: str | None = None
     exception: str | None = None
 
     @classmethod
@@ -61,6 +64,7 @@ class LogLine(BaseModel):
             batch_id=ctx.batch_id if ctx else None,
             document_id=ctx.document_id if ctx else None,
             status=ctx.status if ctx else None,
+            request_id=ctx.request_id if ctx else None,
             exception=fmt.formatException(record.exc_info) if record.exc_info else None,
         )
 

@@ -1,11 +1,12 @@
 # Query API: LLD
 
-## Endpoints (`app/api.py`)
+## Endpoints (`app/api/`)
 
 | Endpoint | Response | Errors |
 | --- | --- | --- |
 | `GET /borrowers` | `list[BorrowerSummary]`, sorted by name | – |
 | `GET /borrowers/{id}` | `BorrowerRecord` (the stored record, as built by resolution) | `404` if the id is unknown |
+| `GET /health` | `{"status": "ok"}` if the database can be read | – |
 
 ```python
 class BorrowerSummary(BaseModel):
@@ -20,7 +21,15 @@ OpenAPI docs are generated at `/docs`.
 
 ## App
 
-- `create_app(db_path) -> FastAPI`: a factory, so tests can point it at a test database.
+| Module | Contents |
+| --- | --- |
+| `main.py` | `create_app(db_path)` (a factory, so tests can point it at a test database) and the Hydra entry point |
+| `borrowers_api.py`, `health_api.py` | One `APIRouter` per resource, with `response_model`s for the OpenAPI docs |
+| `dependencies.py` | `get_conn`, injected with `Depends` |
+| `request_id.py` | `RequestIDMiddleware`: takes `X-Request-Id` from the caller or makes one, returns it, and logs each request with it |
+
+GZip compresses large responses. Authentication, authorization, rate limiting and CORS are not implemented: comments in the code say what production would add and where.
+
 - Each request opens its own **read-only** connection (`sqlite3.connect("file:{path}?mode=ro", uri=True)`) through a FastAPI dependency and closes it afterwards. The API can't write, and nothing is shared between request threads.
 
 ## Database
@@ -30,7 +39,7 @@ OpenAPI docs are generated at `/docs`.
 
 ## Running
 
-`hatch run api` runs `python -m app.api` (a Hydra entry point, like the other commands), which starts Uvicorn with:
+`hatch run api` runs `python -m app.api.main` (a Hydra entry point, like the other commands), which starts Uvicorn with:
 
 ```yaml
 # conf/config.yaml
@@ -41,7 +50,7 @@ api:
 
 ## Logging
 
-The API logs each request as method, path and status code under a new `api` log stage. Paths contain borrower IDs only, never names.
+The API logs each request as method, path and status code under a new `api` log stage, with its request ID. Paths contain borrower IDs only, never names. Uvicorn's own access log is turned off, since it would repeat each line without the request ID.
 
 ## Dependencies
 
