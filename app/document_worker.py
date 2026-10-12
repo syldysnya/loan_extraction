@@ -18,6 +18,7 @@ from app.log import LogContext, Stage
 from app.messages import DocumentMessage
 from app.parsing.registry import ParserRegistry
 from app.parsing.step import parse_document
+from app.resolution.resolve import resolve_all
 
 
 def logger() -> logging.Logger:
@@ -70,6 +71,7 @@ class DocumentWorker:
         except NonRetryableError as e:
             # e.g. an unsupported file type, or extraction failing all its attempts: fail now, no DLQ round trip.
             self._fail_now(received, document_id, safe_error(e))
+            self._resolve_if_batch_finished(document.batch_id)
             return True
         except Exception as e:
             # Leave the message: it becomes visible again after the visibility timeout.
@@ -82,6 +84,7 @@ class DocumentWorker:
         db.set_status(self.conn, document_id, DocumentStatus.DONE)
         self.queue.delete(received.receipt_handle)
         logger().info("done", extra=self._ctx(document_id, DocumentStatus.DONE).extra())
+        self._resolve_if_batch_finished(document.batch_id)
         return True
 
     def _fail_now(self, received: ReceivedMessage, document_id: str, error: str) -> None:
@@ -92,9 +95,22 @@ class DocumentWorker:
     def _on_dead_letter(self, body: str) -> None:
         message = DocumentMessage.parse(body)
         document_id = message.document_id if message else None
-        if document_id:
-            db.set_status(self.conn, document_id, DocumentStatus.FAILED)
+        document = db.get_document(self.conn, document_id) if document_id else None
+        if document:
+            db.set_status(self.conn, document.id, DocumentStatus.FAILED)
         logger().error("moved to DLQ", extra=self._ctx(document_id, DocumentStatus.FAILED).extra())
+        if document:
+            self._resolve_if_batch_finished(document.batch_id)
+
+    def _resolve_if_batch_finished(self, batch_id: str) -> None:
+        """Rebuild borrowers once nothing in the batch is queued or processing. Never fails a document."""
+        if db.unfinished_count(self.conn, batch_id) > 0:
+            return
+        try:
+            resolve_all(self.conn)
+        except Exception as e:
+            ctx = LogContext(Stage.RESOLVE, batch_id=batch_id)
+            logger().error(f"resolution failed: {safe_error(e)}", extra=ctx.extra())
 
     def _ctx(self, document_id: str | None, status: DocumentStatus) -> LogContext:
         doc = db.get_document(self.conn, document_id) if document_id else None

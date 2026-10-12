@@ -60,6 +60,17 @@ class StoredMention:
 
 
 @dataclass
+class BorrowerRow:
+    """A resolved borrower as stored. `record` is BorrowerRecord JSON (built in app.resolution)."""
+
+    id: str
+    name: str
+    record: str
+    conflict_count: int
+    updated_at: str
+
+
+@dataclass
 class ModelCost:
     """Totals for one model, as printed by `hatch run costs`."""
 
@@ -93,6 +104,14 @@ CREATE TABLE IF NOT EXISTS borrower_mentions (
     document_id TEXT NOT NULL,
     data        TEXT NOT NULL,  -- JSON BorrowerMention
     borrower_id TEXT            -- set by resolution
+);
+
+CREATE TABLE IF NOT EXISTS borrowers (
+    id             TEXT PRIMARY KEY,  -- stable: derived from the person's normalized name
+    name           TEXT NOT NULL,
+    record         TEXT NOT NULL,  -- JSON BorrowerRecord
+    conflict_count INTEGER NOT NULL,
+    updated_at     TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS llm_calls (
@@ -211,3 +230,41 @@ def list_mentions(conn: sqlite3.Connection, document_id: str | None = None) -> l
         StoredMention(id, doc_id, BorrowerMention.model_validate_json(data), borrower_id)
         for id, doc_id, data, borrower_id in rows
     ]
+
+
+UNFINISHED = (DocumentStatus.QUEUED, DocumentStatus.PROCESSING)
+BORROWER_COLUMNS = ", ".join(f.name for f in fields(BorrowerRow))
+BORROWER_PLACEHOLDERS = ", ".join("?" for _ in fields(BorrowerRow))
+
+
+def unfinished_count(conn: sqlite3.Connection, batch_id: str) -> int:
+    """Documents of the batch still queued or processing."""
+    placeholders = ", ".join("?" for _ in UNFINISHED)
+    query = f"SELECT COUNT(*) FROM documents WHERE batch_id = ? AND status IN ({placeholders})"
+    count: int = conn.execute(query, (batch_id, *UNFINISHED)).fetchone()[0]
+    return count
+
+
+def replace_borrowers(conn: sqlite3.Connection, borrowers: list[BorrowerRow], links: dict[str, str]) -> None:
+    """Rebuild all borrowers and link each mention to its borrower, in one transaction."""
+    with conn:
+        conn.execute("DELETE FROM borrowers")
+        conn.executemany(
+            f"INSERT INTO borrowers ({BORROWER_COLUMNS}) VALUES ({BORROWER_PLACEHOLDERS})",
+            [astuple(b) for b in borrowers],
+        )
+        conn.execute("UPDATE borrower_mentions SET borrower_id = NULL")
+        conn.executemany(
+            "UPDATE borrower_mentions SET borrower_id = ? WHERE id = ?",
+            [(borrower_id, mention_id) for mention_id, borrower_id in links.items()],
+        )
+
+
+def list_borrowers(conn: sqlite3.Connection) -> list[BorrowerRow]:
+    rows = conn.execute(f"SELECT {BORROWER_COLUMNS} FROM borrowers ORDER BY name").fetchall()
+    return [BorrowerRow(*row) for row in rows]
+
+
+def get_borrower(conn: sqlite3.Connection, borrower_id: str) -> BorrowerRow | None:
+    row = conn.execute(f"SELECT {BORROWER_COLUMNS} FROM borrowers WHERE id = ?", (borrower_id,)).fetchone()
+    return BorrowerRow(*row) if row else None

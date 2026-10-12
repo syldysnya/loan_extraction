@@ -19,6 +19,7 @@ ingest = "python -m app.ingest {args}"
 document-worker = "python -m app.document_worker {args}"
 redrive = "python -m app.redrive {args}"
 costs = "python -m app.costs {args}"
+resolve = "python -m app.resolve {args}"
 test = "pytest {args}"
 lint = ["ruff check .", "ruff format --check .", "mypy app"]
 fmt = ["ruff check --fix .", "ruff format ."]

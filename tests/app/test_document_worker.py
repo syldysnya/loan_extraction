@@ -91,7 +91,8 @@ def test_success_stores_one_mention_per_borrower(folder, conn, s3, worker):
     mentions = db.list_mentions(conn)
     assert len(mentions) == 2  # one per document
     assert {m.mention.name for m in mentions} == {"John Homeowner"}
-    assert all(m.borrower_id is None for m in mentions)  # set later by resolution
+    [borrower] = db.list_borrowers(conn)  # the batch finished, so resolution ran
+    assert {m.borrower_id for m in mentions} == {borrower.id}
     assert {d.document_type for d in db.list_documents(conn)} == {DocumentType.BANK_STATEMENT}
 
 
@@ -119,3 +120,12 @@ def test_rerun_replaces_mentions_instead_of_duplicating(folder, conn, s3, worker
     worker.process_document(doc)
 
     assert len(db.list_mentions(conn, doc.id)) == 1
+
+
+def test_resolution_waits_until_the_batch_is_finished(folder, conn, s3, worker):
+    ingest_folder(str(folder), conn, s3)
+
+    assert worker.run_once()  # 1 of 2 documents done
+    assert db.list_borrowers(conn) == []
+    assert worker.run_once()  # batch finished
+    assert len(db.list_borrowers(conn)) == 1
