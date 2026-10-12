@@ -29,14 +29,15 @@ class TrackedModel:
         self.client = client
         self.conn = conn
 
-    def generate(self, request: LLMRequest, schema: type[T], ctx: CallContext) -> T:
+    def generate(self, request: LLMRequest, schema: type[T], ctx: CallContext, context: object = None) -> T:
+        """`context` is passed to Pydantic validation (e.g. to check citations against the document)."""
         started = time.monotonic()
         usage = Usage()
         error_type = None
         try:
             raw = self.client.complete(request, schema)
             usage = raw.usage  # set before validation, so an invalid answer still counts its tokens
-            return schema.model_validate_json(raw.text)
+            return schema.model_validate_json(raw.text, context=context)
         except Exception as e:
             error_type = type(e).__name__
             raise
