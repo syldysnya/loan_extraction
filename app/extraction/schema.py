@@ -118,6 +118,7 @@ class BorrowerMention(BaseModel):
     name: str = Field(description="Full name of the person.")
     name_source: SourceRef
     ssn_last4: SsnLast4 = Field(description="Last 4 digits of the SSN if shown. Never the full SSN.")
+    ssn_source: SourceRef | None = Field(description="Where the SSN appears; null if no SSN is shown.")
     addresses: list[Address]
     income: list[IncomeEntry]
     accounts: list[Account]
@@ -125,6 +126,7 @@ class BorrowerMention(BaseModel):
     def refs(self) -> list[SourceRef]:
         return [
             self.name_source,
+            *([self.ssn_source] if self.ssn_source else []),
             *(a.source for a in self.addresses),
             *(i.source for i in self.income),
             *(a.source for a in self.accounts),

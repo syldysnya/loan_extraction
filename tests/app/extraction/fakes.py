@@ -51,6 +51,7 @@ def extraction_json(line_start: int = 1, line_end: int = 1, name: str = "John Ho
         name=name,
         name_source=ref,
         ssn_last4="5000",
+        ssn_source=ref,
         addresses=[],
         income=[],
         accounts=[Account(number="123456789", kind=AccountKind.BANK_ACCOUNT, source=ref)],

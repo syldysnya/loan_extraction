@@ -51,8 +51,8 @@ and loan number.
 
 # Rules
 
-1. Cite every value with the line range where the value itself appears, not just its label. Use the line numbers \
-exactly as shown.
+1. Cite every value (including the name and SSN) with the line range where the value itself appears, not just its \
+label. Use the line numbers exactly as shown.
 2. If a document names two people (e.g. a joint tax return or joint account), return one entry per person and \
 repeat shared values under each. On a joint tax return all income is reported jointly, including a spouse's own \
 business: list every income figure under both people and mark it `joint`. On other documents, income that is \

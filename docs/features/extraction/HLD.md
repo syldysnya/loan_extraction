@@ -26,7 +26,7 @@ flowchart LR
 | Each page sent as numbered lines + image | Lines give citable text (OCR'd for scans); the image gives the layout. |
 | Structured JSON output, validated with Pydantic | Malformed output is caught and retried, never stored. |
 | Up to 3 attempts per document (invalid JSON or API error), then the document fails at once | Caps the cost at 3 calls per document; going through the queue's 3 retries as well would mean up to 9. |
-| Every value must appear in the lines it cites (amounts, account numbers, SSN last 4, name parts); otherwise the output is invalid and retried with feedback | Catches misreads and invented values in code, with no extra LLM call unless something is wrong. |
+| (Deferred) Every value must appear in the lines it cites (amounts, account numbers, SSN last 4, name parts); otherwise the output is invalid and retried with feedback | Catches misreads and invented values in code, with no extra LLM call unless something is wrong. |
 | Every value cites a line range; page, quote and bounding boxes are looked up from parsing's lines | The model only picks line numbers it can see, so the reference can't be invented. A cited line that doesn't exist counts as invalid output. |
 | Model chosen by Hydra config (`model=gemini` or `model=openai`) | Swap or benchmark models without code changes. |
 | Extraction runs in the document worker, after parsing | Same retry and DLQ handling as the rest of the pipeline. |

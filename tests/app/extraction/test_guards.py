@@ -9,7 +9,7 @@ REF = SourceRef(line_start=1, line_end=1)
 def _extraction(*numbers: str, ssn_last4: str | None = None) -> DocumentExtraction:
     accounts = [Account(number=n, kind=AccountKind.BANK_ACCOUNT, source=REF) for n in numbers]
     mention = BorrowerMention(
-        name="John", name_source=REF, ssn_last4=ssn_last4, addresses=[], income=[], accounts=accounts
+        name="John", name_source=REF, ssn_last4=ssn_last4, ssn_source=REF, addresses=[], income=[], accounts=accounts
     )
     return DocumentExtraction(document_type=DocumentType.OTHER, borrowers=[mention])
 

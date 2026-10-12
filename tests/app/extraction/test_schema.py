@@ -10,7 +10,7 @@ from tests.app.extraction.fakes import extraction_json
 def test_refs_cover_every_value():
     [mention] = DocumentExtraction.model_validate_json(extraction_json(2, 3)).borrowers
 
-    assert [(r.line_start, r.line_end) for r in mention.refs()] == [(2, 3), (2, 3)]
+    assert [(r.line_start, r.line_end) for r in mention.refs()] == [(2, 3)] * 3  # name, SSN, account
 
 
 def test_citation_within_document_is_valid():
