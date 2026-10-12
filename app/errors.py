@@ -10,6 +10,11 @@ class NonRetryableError(Exception):
     """
 
 
+def validation_errors(e: ValidationError) -> list[tuple[str, str]]:
+    """(field path, message) per error. Pydantic keeps the invalid input separately, so messages hold no values."""
+    return [(PATH_SEPARATOR.join(str(p) for p in err["loc"]), err["msg"]) for err in e.errors()]
+
+
 def safe_error(e: BaseException) -> str:
     """Describe an error for `documents.error` and logs, without any values from the document.
 

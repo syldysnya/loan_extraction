@@ -1,9 +1,11 @@
 import sqlite3
+import uuid
 from dataclasses import astuple, dataclass, fields
 from enum import StrEnum
 
 from pydantic import TypeAdapter
 
+from app.extraction.schema import BorrowerMention, DocumentType
 from app.parsing.types import Page
 
 
@@ -22,10 +24,13 @@ class Document:
     sha256: str
     status: DocumentStatus
     error: str | None = None
+    document_type: DocumentType | None = None  # set by extraction
 
     def __post_init__(self) -> None:
         # Rows come back from SQLite as plain strings.
         self.status = DocumentStatus(self.status)
+        if self.document_type is not None:
+            self.document_type = DocumentType(self.document_type)
 
 
 @dataclass
@@ -44,6 +49,14 @@ class LLMCall:
     duration_ms: int
     error_type: str | None
     created_at: str
+
+
+@dataclass
+class StoredMention:
+    id: str
+    document_id: str
+    mention: BorrowerMention
+    borrower_id: str | None
 
 
 @dataclass
@@ -71,7 +84,15 @@ CREATE TABLE IF NOT EXISTS documents (
     sha256   TEXT NOT NULL UNIQUE,
     status   TEXT NOT NULL CHECK (status IN ({", ".join(f"'{s}'" for s in DocumentStatus)})),
     error    TEXT,
+    document_type TEXT,  -- set by extraction
     pages    TEXT  -- JSON list of Page, set by parsing
+);
+
+CREATE TABLE IF NOT EXISTS borrower_mentions (
+    id          TEXT PRIMARY KEY,
+    document_id TEXT NOT NULL,
+    data        TEXT NOT NULL,  -- JSON BorrowerMention
+    borrower_id TEXT            -- set by resolution
 );
 
 CREATE TABLE IF NOT EXISTS llm_calls (
@@ -132,6 +153,11 @@ def set_status(conn: sqlite3.Connection, document_id: str, status: DocumentStatu
     conn.commit()
 
 
+def set_document_type(conn: sqlite3.Connection, document_id: str, document_type: DocumentType) -> None:
+    conn.execute("UPDATE documents SET document_type = ? WHERE id = ?", (document_type, document_id))
+    conn.commit()
+
+
 def save_pages(conn: sqlite3.Connection, document_id: str, pages: list[Page]) -> None:
     conn.execute("UPDATE documents SET pages = ? WHERE id = ?", (PAGES.dump_json(pages).decode(), document_id))
     conn.commit()
@@ -163,3 +189,25 @@ def cost_by_model(conn: sqlite3.Connection, batch_id: str | None = None) -> list
     else:
         rows = conn.execute(totals.format(where="WHERE batch_id = ?"), (batch_id,)).fetchall()
     return [ModelCost(*row) for row in rows]
+
+
+def replace_mentions(conn: sqlite3.Connection, document_id: str, mentions: list[BorrowerMention]) -> None:
+    """Store a document's mentions, replacing any from an earlier run, so retries don't duplicate them."""
+    with conn:
+        conn.execute("DELETE FROM borrower_mentions WHERE document_id = ?", (document_id,))
+        conn.executemany(
+            "INSERT INTO borrower_mentions (id, document_id, data) VALUES (?, ?, ?)",
+            [(uuid.uuid4().hex, document_id, m.model_dump_json()) for m in mentions],
+        )
+
+
+def list_mentions(conn: sqlite3.Connection, document_id: str | None = None) -> list[StoredMention]:
+    query = "SELECT id, document_id, data, borrower_id FROM borrower_mentions"
+    if document_id is None:
+        rows = conn.execute(f"{query} ORDER BY document_id").fetchall()
+    else:
+        rows = conn.execute(f"{query} WHERE document_id = ?", (document_id,)).fetchall()
+    return [
+        StoredMention(id, doc_id, BorrowerMention.model_validate_json(data), borrower_id)
+        for id, doc_id, data, borrower_id in rows
+    ]

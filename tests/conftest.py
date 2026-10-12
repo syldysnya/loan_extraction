@@ -3,12 +3,14 @@ import pytest
 
 from app import db
 from app.document_worker import DocumentWorker
+from app.extraction.tracking import TrackedModel
 from app.local_s3 import LocalS3
 from app.local_sqs import LocalSQS
 from app.parsing.ocr import Ocr
 from app.parsing.parsers import ImageParser, PdfParser
 from app.parsing.registry import ParserRegistry
 from app.parsing.types import BBox, TextLine
+from tests.app.extraction.fakes import FixedClient, extraction_json
 
 OCR_TEXT = "text read by OCR"
 
@@ -62,8 +64,14 @@ def registry() -> ParserRegistry:
 
 
 @pytest.fixture
-def worker(conn, queue, s3, registry):
-    return DocumentWorker(conn, queue, s3, registry)
+def model(conn) -> TrackedModel:
+    """A fake LLM that always extracts one borrower, citing line 1."""
+    return TrackedModel(FixedClient(extraction_json(1, 1)), conn)
+
+
+@pytest.fixture
+def worker(conn, queue, s3, registry, model):
+    return DocumentWorker(conn, queue, s3, registry, model)
 
 
 def statuses(conn) -> list[db.DocumentStatus]:

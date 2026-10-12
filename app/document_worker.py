@@ -9,13 +9,15 @@ from omegaconf import DictConfig
 from app import db
 from app.config import CONFIG_NAME, CONFIG_PATH, HYDRA_VERSION_BASE
 from app.db import Document, DocumentStatus
+from app.errors import NonRetryableError, safe_error
+from app.extraction.extractor import extract
+from app.extraction.tracking import TrackedModel
 from app.local_s3 import LocalS3
 from app.local_sqs import LocalSQS, ReceivedMessage
 from app.log import LogContext, Stage
 from app.messages import DocumentMessage
 from app.parsing.registry import ParserRegistry
 from app.parsing.step import parse_document
-from app.parsing.types import UnsupportedFileType
 
 
 def logger() -> logging.Logger:
@@ -23,16 +25,27 @@ def logger() -> logging.Logger:
 
 
 class DocumentWorker:
-    def __init__(self, conn: sqlite3.Connection, queue: LocalSQS, s3: LocalS3, registry: ParserRegistry):
+    def __init__(
+        self,
+        conn: sqlite3.Connection,
+        queue: LocalSQS,
+        s3: LocalS3,
+        registry: ParserRegistry,
+        model: TrackedModel,
+    ):
         self.conn = conn
         self.queue = queue
         self.s3 = s3
         self.registry = registry
+        self.model = model
 
     def process_document(self, document: Document) -> None:
-        """Per-document work: parse. Extraction and resolution are added by later features."""
+        """Per-document work: parse, then extract. Resolution is added by a later feature."""
         pages = parse_document(document, self.s3, self.registry)
         db.save_pages(self.conn, document.id, pages)
+        extraction = extract(document, pages, self.s3, self.model)
+        db.set_document_type(self.conn, document.id, extraction.document_type)
+        db.replace_mentions(self.conn, document.id, extraction.borrowers)
 
     def run_once(self) -> bool:
         """Handle one message. Returns False if the queue had nothing visible."""
@@ -54,14 +67,16 @@ class DocumentWorker:
         logger().info("processing", extra=self._ctx(document_id, DocumentStatus.PROCESSING).extra())
         try:
             self.process_document(document)
-        except UnsupportedFileType as e:
-            # A retry can't change the file type, so fail now instead of going through the DLQ.
-            self._fail_now(received, document_id, str(e))
+        except NonRetryableError as e:
+            # e.g. an unsupported file type, or extraction failing all its attempts: fail now, no DLQ round trip.
+            self._fail_now(received, document_id, safe_error(e))
             return True
         except Exception as e:
             # Leave the message: it becomes visible again after the visibility timeout.
-            db.set_status(self.conn, document_id, DocumentStatus.QUEUED, error=str(e))
-            logger().exception("failed, will retry", extra=self._ctx(document_id, DocumentStatus.QUEUED).extra())
+            # Only the safe description is stored and logged: messages and tracebacks can contain document data.
+            error = safe_error(e)
+            db.set_status(self.conn, document_id, DocumentStatus.QUEUED, error=error)
+            logger().error(f"failed, will retry: {error}", extra=self._ctx(document_id, DocumentStatus.QUEUED).extra())
             return True
 
         db.set_status(self.conn, document_id, DocumentStatus.DONE)
@@ -88,12 +103,14 @@ class DocumentWorker:
 
 @hydra.main(version_base=HYDRA_VERSION_BASE, config_path=CONFIG_PATH, config_name=CONFIG_NAME)
 def main(cfg: DictConfig) -> None:
+    conn = db.connect(cfg.db_path)
     queue = instantiate(cfg.queue)
     worker = DocumentWorker(
-        conn=db.connect(cfg.db_path),
+        conn=conn,
         queue=queue,
         s3=instantiate(cfg.s3, queue=queue),
         registry=instantiate(cfg.parsing),
+        model=instantiate(cfg.model, conn=conn),
     )
     logger().info("started, polling queue", extra=LogContext(Stage.WORKER).extra())
     while True:
