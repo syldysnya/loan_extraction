@@ -55,7 +55,7 @@ def test_retries_keep_last_error(folder, conn, queue, s3, worker, monkeypatch):
     (folder / "b.pdf").unlink()
     ingest_folder(str(folder), conn, s3)
 
-    def boom(self, document_id):
+    def boom(self, document):
         raise RuntimeError("boom")
 
     monkeypatch.setattr(DocumentWorker, "process_document", boom)

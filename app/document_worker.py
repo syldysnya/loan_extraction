@@ -8,12 +8,12 @@ from omegaconf import DictConfig
 
 from app import db
 from app.config import CONFIG_NAME, CONFIG_PATH, HYDRA_VERSION_BASE
-from app.db import DocumentStatus
+from app.db import Document, DocumentStatus
 from app.local_s3 import LocalS3
 from app.local_sqs import LocalSQS, ReceivedMessage
 from app.log import LogContext, Stage
 from app.messages import DocumentMessage
-from app.parsing.registry import ParserRegistry, build_registry
+from app.parsing.registry import ParserRegistry
 from app.parsing.step import parse_document
 from app.parsing.types import UnsupportedFileType
 
@@ -29,11 +29,10 @@ class DocumentWorker:
         self.s3 = s3
         self.registry = registry
 
-    def process_document(self, document_id: str) -> None:
+    def process_document(self, document: Document) -> None:
         """Per-document work: parse. Extraction and resolution are added by later features."""
-        document = db.get_document(self.conn, document_id)
         pages = parse_document(document, self.s3, self.registry)
-        db.save_pages(self.conn, document_id, pages)
+        db.save_pages(self.conn, document.id, pages)
 
     def run_once(self) -> bool:
         """Handle one message. Returns False if the queue had nothing visible."""
@@ -43,17 +42,18 @@ class DocumentWorker:
 
         # A malformed message can't be fixed by redelivery, so delete it instead of retrying.
         message = DocumentMessage.parse(received.body)
-        if message is None or db.get_document(self.conn, message.document_id) is None:
+        document = db.get_document(self.conn, message.document_id) if message else None
+        if document is None:
             self.queue.delete(received.receipt_handle)
             ctx = LogContext(Stage.WORKER)
             logger().error(f"deleted malformed message {received.receipt_handle}", extra=ctx.extra())
             return True
-        document_id = message.document_id
+        document_id = document.id
 
         db.set_status(self.conn, document_id, DocumentStatus.PROCESSING)
         logger().info("processing", extra=self._ctx(document_id, DocumentStatus.PROCESSING).extra())
         try:
-            self.process_document(document_id)
+            self.process_document(document)
         except UnsupportedFileType as e:
             # A retry can't change the file type, so fail now instead of going through the DLQ.
             self._fail_now(received, document_id, str(e))
@@ -93,7 +93,7 @@ def main(cfg: DictConfig) -> None:
         conn=db.connect(cfg.db_path),
         queue=queue,
         s3=instantiate(cfg.s3, queue=queue),
-        registry=build_registry(cfg.parsing.render_dpi),
+        registry=instantiate(cfg.parsing),
     )
     logger().info("started, polling queue", extra=LogContext(Stage.WORKER).extra())
     while True:
