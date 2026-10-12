@@ -12,14 +12,14 @@ dependencies = ["hydra-core>=1.3", "pydantic>=2", "filetype>=1.2", "pymupdf>=1.2
 packages = ["app"]
 
 [tool.hatch.envs.default]
-dependencies = ["pytest", "ruff"]
+dependencies = ["pytest", "ruff", "mypy"]
 
 [tool.hatch.envs.default.scripts]
 ingest = "python -m app.ingest {args}"
 document-worker = "python -m app.document_worker {args}"
 redrive = "python -m app.redrive {args}"
 test = "pytest {args}"
-lint = ["ruff check .", "ruff format --check ."]
+lint = ["ruff check .", "ruff format --check .", "mypy app"]
 fmt = ["ruff check --fix .", "ruff format ."]
 
 [tool.pytest.ini_options]
@@ -32,3 +32,13 @@ extend-exclude = ["docs"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I"]
+
+[tool.mypy]
+python_version = "3.12"
+disallow_untyped_defs = true
+warn_return_any = true
+warn_unused_ignores = true
+
+[[tool.mypy.overrides]]
+module = ["filetype"]
+ignore_missing_imports = true

@@ -1,6 +1,7 @@
 defaults:
   - queue: local
   - s3: local
+  - parsing: default
   - override hydra/job_logging: custom
   - _self_
 

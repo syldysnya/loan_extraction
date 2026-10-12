@@ -65,8 +65,9 @@ A retry overwrites the same keys and column, so it's safe to repeat.
 
 - `LocalS3`: add `get(key) -> bytes`, and `page_key(document_id, page_no)`. `put` sends a file event only for `input/` keys.
 - `documents`: add a `pages` column (JSON text, nullable).
-- Worker: gets the S3 client too.
-- Config: `parsing.render_dpi: 150`.
+- Worker: becomes a `DocumentWorker` class holding the DB connection, queue, S3 client and parser registry.
+- Registry: `build_registry(render_dpi)`, built by Hydra `instantiate` from `conf/parsing/default.yaml`.
+- Config: `conf/parsing/default.yaml` with `render_dpi: 150`.
 - Dependencies: `pymupdf`, `filetype`.
 
 ## PRs
