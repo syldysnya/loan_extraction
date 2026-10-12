@@ -14,5 +14,5 @@ def parse_document(document: Document, s3: LocalS3, registry: ParserRegistry) ->
     for raw in raw_pages:
         key = page_key(document.id, raw.page_no)
         s3.put(key, raw.image)
-        pages.append(Page(page_no=raw.page_no, text=raw.text, image_key=key))
+        pages.append(Page(page_no=raw.page_no, lines=raw.lines, ocr=raw.ocr, image_key=key))
     return pages

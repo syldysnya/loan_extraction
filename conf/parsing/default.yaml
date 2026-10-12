@@ -1,2 +1,3 @@
 _target_: app.parsing.registry.build_registry
 render_dpi: 150
+ocr_dpi: 300

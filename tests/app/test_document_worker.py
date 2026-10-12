@@ -3,7 +3,7 @@ from app.db import DocumentStatus
 from app.document_worker import DocumentWorker
 from app.ingest import ingest_folder
 from app.messages import DocumentMessage
-from tests.conftest import statuses
+from tests.conftest import OCR_TEXT, statuses
 
 
 def test_success_parses_marks_done_and_deletes_message(folder, conn, queue, s3, worker):
@@ -16,7 +16,10 @@ def test_success_parses_marks_done_and_deletes_message(folder, conn, queue, s3, 
     assert list(queue.main.glob("*.json")) == []
     _, b = db.list_documents(conn)
     pages = db.get_pages(conn, b.id)
-    assert [(p.page_no, p.text) for p in pages] == [(1, "Account Number: 222"), (2, None)]
+    assert [(p.page_no, p.ocr, [ln.text for ln in p.lines]) for p in pages] == [
+        (1, False, ["Account Number: 222"]),
+        (2, True, [OCR_TEXT]),
+    ]
     assert all((s3.root / p.image_key).exists() for p in pages)
 
 

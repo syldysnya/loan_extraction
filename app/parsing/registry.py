@@ -1,4 +1,5 @@
-from app.parsing.parsers import DEFAULT_RENDER_DPI, ImageParser, PdfParser
+from app.parsing.ocr import TesseractOcr
+from app.parsing.parsers import DEFAULT_OCR_DPI, DEFAULT_RENDER_DPI, ImageParser, PdfParser
 from app.parsing.types import MimeType, Parser, UnsupportedFileType
 
 
@@ -20,9 +21,10 @@ class ParserRegistry:
         return parser
 
 
-def build_registry(render_dpi: int = DEFAULT_RENDER_DPI) -> ParserRegistry:
+def build_registry(render_dpi: int = DEFAULT_RENDER_DPI, ocr_dpi: int = DEFAULT_OCR_DPI) -> ParserRegistry:
     # A new file type is one new Parser added here.
-    return ParserRegistry([PdfParser(render_dpi), ImageParser()])
+    ocr = TesseractOcr()
+    return ParserRegistry([PdfParser(ocr, render_dpi, ocr_dpi), ImageParser(ocr)])
 
 
 REGISTRY = build_registry()
