@@ -1,0 +1,15 @@
+# Built as a TrackedModel, so every call is recorded in llm_calls.
+# The DB connection is passed in at instantiate time: instantiate(cfg.model, conn=conn).
+_target_: app.extraction.tracking.TrackedModel
+client:
+  _target_: app.extraction.llm.OpenAIClient
+  model_id: gpt-4o-mini
+  api_key: ${oc.env:OPENAI_API_KEY}
+  supports_image_input: true
+  temperature: 0.0  # as deterministic as the model allows
+  max_output_tokens: 8192
+  pricing:  # USD per 1M tokens, checked 2026-10-12
+    _target_: app.extraction.llm.Pricing
+    input_per_1m: 0.15
+    cached_input_per_1m: 0.075
+    output_per_1m: 0.60
