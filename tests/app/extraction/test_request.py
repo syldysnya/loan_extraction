@@ -1,5 +1,6 @@
 from app.extraction.llm import ImagePart, TextPart
-from app.extraction.request import NO_TEXT, SYSTEM_PROMPT, build_request
+from app.extraction.prompts import EXTRACTION_SYSTEM_PROMPT, NO_TEXT, build_user_prompt
+from app.extraction.request import build_request
 from app.parsing.types import BBox, Line, Page
 
 BOX = BBox(left=0, top=0, width=1, height=0.1)
@@ -9,12 +10,13 @@ PAGES = [
 ]
 
 
-def test_numbered_lines_then_image_per_page():
+def test_user_prompt_then_numbered_lines_and_image_per_page():
     request = build_request(PAGES, [b"img1", b"img2"], include_images=True)
 
-    assert request.system_prompt == SYSTEM_PROMPT
-    text1, image1, text2, image2 = request.parts
-    assert isinstance(text1, TextPart) and text1.text == "Page 1:\n[1] W-2 2024"
+    assert request.system_prompt == EXTRACTION_SYSTEM_PROMPT
+    task, text1, image1, text2, image2 = request.parts
+    assert isinstance(task, TextPart) and task.text == build_user_prompt(page_count=2, last_line_no=1)
+    assert isinstance(text1, TextPart) and text1.text == "### Page 1\n[1] W-2 2024"
     assert isinstance(image1, ImagePart) and image1.png == b"img1"
     assert isinstance(text2, TextPart) and "OCR" in text2.text and NO_TEXT in text2.text
     assert isinstance(image2, ImagePart)

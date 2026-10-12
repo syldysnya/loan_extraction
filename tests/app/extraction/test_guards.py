@@ -1,7 +1,7 @@
 import pytest
 
 from app.extraction.guards import remove_ssn_like_accounts
-from app.extraction.schema import Account, AccountKind, BorrowerMention, DocumentExtraction, SourceRef
+from app.extraction.schema import Account, AccountKind, BorrowerMention, DocumentExtraction, DocumentType, SourceRef
 
 REF = SourceRef(line_start=1, line_end=1)
 
@@ -11,7 +11,7 @@ def _extraction(*numbers: str, ssn_last4: str | None = None) -> DocumentExtracti
     mention = BorrowerMention(
         name="John", name_source=REF, ssn_last4=ssn_last4, addresses=[], income=[], accounts=accounts
     )
-    return DocumentExtraction(borrowers=[mention])
+    return DocumentExtraction(document_type=DocumentType.OTHER, borrowers=[mention])
 
 
 def test_ssn_shaped_numbers_are_removed_and_reported():

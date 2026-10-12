@@ -6,7 +6,7 @@ from app.extraction.extractor import MAX_ATTEMPTS, ExtractionFailed, extract
 from app.extraction.tracking import TrackedModel
 from app.ingest import ingest_folder
 from app.parsing.step import parse_document
-from tests.app.extraction.fakes import ScriptedClient, extraction_json
+from tests.app.extraction.fakes import FlakyClient, ScriptedClient, extraction_json
 
 NAME = "John Homeowner"
 
@@ -62,8 +62,8 @@ def test_request_has_the_document_lines_and_image(parsed, conn, s3):
     extract(document, pages, s3, TrackedModel(client, conn))
 
     [request] = client.requests
-    assert "[1] Account Number: 111" in request.parts[0].text
-    assert request.parts[1].png == s3.get(pages[0].image_key)
+    assert "[1] Account Number: 111" in request.parts[1].text
+    assert request.parts[2].png == s3.get(pages[0].image_key)
 
 
 def test_ssn_like_account_is_dropped_but_extraction_kept(parsed, conn, s3):
@@ -74,3 +74,26 @@ def test_ssn_like_account_is_dropped_but_extraction_kept(parsed, conn, s3):
 
     [mention] = result.borrowers
     assert (mention.name, mention.accounts) == (NAME, [])
+
+
+def test_retry_after_invalid_output_tells_the_model_what_to_fix(parsed, conn, s3):
+    document, pages = parsed
+    client = ScriptedClient(extraction_json(205, 25, name=NAME), extraction_json(1, 1))
+
+    extract(document, pages, s3, TrackedModel(client, conn))
+
+    first, second = client.requests
+    feedback = second.parts[-1].text
+    assert second.parts[:-1] == first.parts  # same document, plus the feedback
+    assert "borrowers.0.name_source" in feedback and "cited lines are not in the document" in feedback
+    assert NAME not in feedback  # paths and messages only, no document values
+
+
+def test_retry_after_api_error_resends_the_same_request(parsed, conn, s3):
+    document, pages = parsed
+    client = FlakyClient(extraction_json(1, 1))
+
+    extract(document, pages, s3, TrackedModel(client, conn))
+
+    first, second = client.requests
+    assert second == first
