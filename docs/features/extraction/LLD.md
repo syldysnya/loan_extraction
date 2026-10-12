@@ -69,7 +69,9 @@ class LLMClient(ABC):
     model_id: str
     pricing: Pricing
     supports_image_input: bool
-    def generate(self, request: ExtractionRequest) -> LLMResponse: ...   # LLMResponse: output: DocumentExtraction, usage: Usage
+    def complete(self, request: LLMRequest, schema: type[BaseModel]) -> RawResponse: ...  # RawResponse: text (JSON), usage
+
+# LLMRequest: system_prompt + parts (TextPart | ImagePart)
 ```
 
 | Client | SDK | Structured output | Usage fields |
@@ -81,27 +83,29 @@ Cost = `(input − cached) × input_per_1m + cached × cached_input_per_1m + out
 
 ## Model config (`conf/model/`)
 
+Each config builds a `TrackedModel` around its client, so tracking can't be skipped. The DB connection is passed in at runtime: `instantiate(cfg.model, conn=conn)`.
+
 ```yaml
 # conf/model/gemini.yaml
-_target_: app.extraction.llm.GeminiClient
-model_id: gemini-3.5-flash-lite
-api_key: ${oc.env:GOOGLE_API_KEY}
-supports_image_input: true
-pricing: {input_per_1m: 0.30, cached_input_per_1m: 0.03, output_per_1m: 2.50}
+_target_: app.extraction.tracking.TrackedModel
+client:
+  _target_: app.extraction.llm.GeminiClient
+  model_id: gemini-3.5-flash-lite
+  api_key: ${oc.env:GOOGLE_API_KEY}
+  supports_image_input: true
+  temperature: 0.0
+  max_output_tokens: 8192
+  pricing: {_target_: app.extraction.llm.Pricing, input_per_1m: 0.30, cached_input_per_1m: 0.03, output_per_1m: 2.50}
 
-# conf/model/openai.yaml
-_target_: app.extraction.llm.OpenAIClient
-model_id: gpt-4o-mini
-api_key: ${oc.env:OPENAI_API_KEY}
-supports_image_input: true
-pricing: {input_per_1m: 0.15, cached_input_per_1m: 0.075, output_per_1m: 0.60}
+# conf/model/openai.yaml: same shape, OpenAIClient, gpt-4o-mini, OPENAI_API_KEY,
+# pricing 0.15 / 0.075 / 0.60
 ```
 
-Default: `model: gemini`. Switch with `model=openai`. Prices were checked on 2026-10-12; confirm against the providers' pricing pages before relying on cost totals.
+Default: `model: gemini`. Switch with `model=openai`. A missing API key fails at startup ("environment variable not found"). Prices were checked on 2026-10-12; confirm against the providers' pricing pages before relying on cost totals.
 
 ## Tracking (`app/extraction/tracking.py`)
 
-`TrackedModel` wraps an `LLMClient`. Each `generate` call is timed, and one `llm_calls` row is written, whether it succeeds or fails. Errors are re-raised.
+`TrackedModel` wraps an `LLMClient`. `generate(request, schema, ctx)` calls the client, validates the JSON against `schema`, and writes one `llm_calls` row whether it succeeds or fails. Validation happens here, after the usage is known, so an invalid answer still records its tokens. Errors are re-raised.
 
 | Column | Type |
 | --- | --- |

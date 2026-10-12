@@ -2,6 +2,7 @@ defaults:
   - queue: local
   - s3: local
   - parsing: default
+  - model: gemini
   - override hydra/job_logging: custom
   - _self_
 

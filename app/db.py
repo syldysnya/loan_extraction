@@ -28,6 +28,37 @@ class Document:
         self.status = DocumentStatus(self.status)
 
 
+@dataclass
+class LLMCall:
+    """One LLM call: what it used and cost. No prompt or response (they contain PII)."""
+
+    id: str
+    document_id: str
+    batch_id: str
+    model_id: str
+    attempt: int
+    input_tokens: int
+    cached_input_tokens: int
+    output_tokens: int
+    cost_usd: float
+    duration_ms: int
+    error_type: str | None
+    created_at: str
+
+
+@dataclass
+class ModelCost:
+    """Totals for one model, as printed by `hatch run costs`."""
+
+    model_id: str
+    calls: int
+    failed_calls: int
+    input_tokens: int
+    cached_input_tokens: int
+    output_tokens: int
+    cost_usd: float
+
+
 # Column list in Document field order, so a row maps straight onto Document(*row).
 COLUMNS = ", ".join(f.name for f in fields(Document))
 PLACEHOLDERS = ", ".join("?" for _ in fields(Document))
@@ -41,6 +72,21 @@ CREATE TABLE IF NOT EXISTS documents (
     status   TEXT NOT NULL CHECK (status IN ({", ".join(f"'{s}'" for s in DocumentStatus)})),
     error    TEXT,
     pages    TEXT  -- JSON list of Page, set by parsing
+);
+
+CREATE TABLE IF NOT EXISTS llm_calls (
+    id                  TEXT PRIMARY KEY,
+    document_id         TEXT NOT NULL,
+    batch_id            TEXT NOT NULL,
+    model_id            TEXT NOT NULL,
+    attempt             INTEGER NOT NULL,
+    input_tokens        INTEGER NOT NULL,
+    cached_input_tokens INTEGER NOT NULL,
+    output_tokens       INTEGER NOT NULL,
+    cost_usd            REAL NOT NULL,
+    duration_ms         INTEGER NOT NULL,
+    error_type          TEXT,  -- exception class name only, never the message
+    created_at          TEXT NOT NULL
 );
 """
 
@@ -94,3 +140,26 @@ def save_pages(conn: sqlite3.Connection, document_id: str, pages: list[Page]) ->
 def get_pages(conn: sqlite3.Connection, document_id: str) -> list[Page] | None:
     row = conn.execute("SELECT pages FROM documents WHERE id = ?", (document_id,)).fetchone()
     return PAGES.validate_json(row[0]) if row and row[0] else None
+
+
+LLM_CALL_COLUMNS = ", ".join(f.name for f in fields(LLMCall))
+LLM_CALL_PLACEHOLDERS = ", ".join("?" for _ in fields(LLMCall))
+
+
+def insert_llm_call(conn: sqlite3.Connection, call: LLMCall) -> None:
+    conn.execute(f"INSERT INTO llm_calls ({LLM_CALL_COLUMNS}) VALUES ({LLM_CALL_PLACEHOLDERS})", astuple(call))
+    conn.commit()
+
+
+def cost_by_model(conn: sqlite3.Connection, batch_id: str | None = None) -> list[ModelCost]:
+    """Totals per model, for one batch or all of them. Column order matches ModelCost."""
+    totals = """
+        SELECT model_id, COUNT(*), COUNT(error_type), SUM(input_tokens), SUM(cached_input_tokens),
+               SUM(output_tokens), SUM(cost_usd)
+        FROM llm_calls {where} GROUP BY model_id ORDER BY model_id
+    """
+    if batch_id is None:
+        rows = conn.execute(totals.format(where="")).fetchall()
+    else:
+        rows = conn.execute(totals.format(where="WHERE batch_id = ?"), (batch_id,)).fetchall()
+    return [ModelCost(*row) for row in rows]
