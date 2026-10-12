@@ -7,7 +7,8 @@ Hatch scripts, defined in `pyproject.toml`:
 ```bash
 hatch run ingest folder=data/loan_data   # upload a batch
 hatch run document-worker                # consume the queue
-hatch run redrive                        # move DLQ messages back to the queue
+hatch run redrive                        # move all DLQ messages back to the queue
+hatch run redrive batch_id=<id>          # only that batch's documents
 ```
 
 ## Upload
@@ -44,7 +45,7 @@ The per-document work (parse, extract, resolve) is added by later features.
 
 ## Redrive
 
-For each message in `queue/dlq/`: reset its `receive_count` to 0, move it to `queue/main/`, and set its document to `queued`.
+For each message in `queue/dlq/` (only documents with that `batch_id`, if given): reset its `receive_count` to 0, move it to `queue/main/`, and set its document to `queued`.
 
 ## Table: `documents`
 
