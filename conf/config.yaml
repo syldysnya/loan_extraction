@@ -7,6 +7,9 @@ defaults:
 db_path: loan.db
 poll_interval_s: 1
 
+parsing:
+  render_dpi: 150
+
 folder: ???      # ingest
 batch_id: null   # redrive (optional)
 

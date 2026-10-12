@@ -2,6 +2,10 @@ import sqlite3
 from dataclasses import astuple, dataclass, fields
 from enum import StrEnum
 
+from pydantic import TypeAdapter
+
+from app.parsing.types import Page
+
 
 class DocumentStatus(StrEnum):
     QUEUED = "queued"
@@ -35,9 +39,12 @@ CREATE TABLE IF NOT EXISTS documents (
     filename TEXT NOT NULL,
     sha256   TEXT NOT NULL UNIQUE,
     status   TEXT NOT NULL CHECK (status IN ({", ".join(f"'{s}'" for s in DocumentStatus)})),
-    error    TEXT
+    error    TEXT,
+    pages    TEXT  -- JSON list of Page, set by parsing
 );
 """
+
+PAGES = TypeAdapter(list[Page])
 
 
 def connect(db_path: str) -> sqlite3.Connection:
@@ -77,3 +84,13 @@ def set_status(conn: sqlite3.Connection, document_id: str, status: DocumentStatu
         (status, error, document_id),
     )
     conn.commit()
+
+
+def save_pages(conn: sqlite3.Connection, document_id: str, pages: list[Page]) -> None:
+    conn.execute("UPDATE documents SET pages = ? WHERE id = ?", (PAGES.dump_json(pages).decode(), document_id))
+    conn.commit()
+
+
+def get_pages(conn: sqlite3.Connection, document_id: str) -> list[Page] | None:
+    row = conn.execute("SELECT pages FROM documents WHERE id = ?", (document_id,)).fetchone()
+    return PAGES.validate_json(row[0]) if row and row[0] else None

@@ -1,4 +1,4 @@
-from app.parsing.parsers import ImageParser, PdfParser
+from app.parsing.parsers import DEFAULT_RENDER_DPI, ImageParser, PdfParser
 from app.parsing.types import MimeType, Parser, UnsupportedFileType
 
 
@@ -20,5 +20,9 @@ class ParserRegistry:
         return parser
 
 
-# A new file type is one new Parser added here.
-REGISTRY = ParserRegistry([PdfParser(), ImageParser()])
+def build_registry(render_dpi: int = DEFAULT_RENDER_DPI) -> ParserRegistry:
+    # A new file type is one new Parser added here.
+    return ParserRegistry([PdfParser(render_dpi), ImageParser()])
+
+
+REGISTRY = build_registry()

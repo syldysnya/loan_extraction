@@ -65,7 +65,8 @@ A retry overwrites the same keys and column, so it's safe to repeat.
 
 - `LocalS3`: add `get(key) -> bytes`, and `page_key(document_id, page_no)`. `put` sends a file event only for `input/` keys.
 - `documents`: add a `pages` column (JSON text, nullable).
-- Worker: gets the S3 client too.
+- Worker: becomes a `DocumentWorker` class holding the DB connection, queue, S3 client and parser registry.
+- Registry: `build_registry(render_dpi)`; the worker builds it from config.
 - Config: `parsing.render_dpi: 150`.
 - Dependencies: `pymupdf`, `filetype`.
 
