@@ -1,3 +1,4 @@
+from app.parsing.parsers import ImageParser, PdfParser
 from app.parsing.types import MimeType, Parser, UnsupportedFileType
 
 
@@ -19,5 +20,5 @@ class ParserRegistry:
         return parser
 
 
-# Parsers are added here as they are implemented.
-REGISTRY = ParserRegistry([])
+# A new file type is one new Parser added here.
+REGISTRY = ParserRegistry([PdfParser(), ImageParser()])
