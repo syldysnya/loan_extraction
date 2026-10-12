@@ -54,7 +54,12 @@ Both use PyMuPDF (text extraction and rendering in one library).
 3. Writes each page image to `s3/pages/{document_id}/{page_no}.png`.
 4. Saves `list[Page]` as JSON in `documents.pages`.
 
-Any error (unsupported type, broken file) raises, so the message is retried and then goes to the DLQ. A retry overwrites the same keys and column, so it's safe to repeat.
+| Error | Action |
+| --- | --- |
+| `UnsupportedFileType` | Mark the document `failed`, delete the message, log it. A retry can't change the file type. |
+| Any other error (e.g. a broken file) | Retry, then DLQ, as for any failure. |
+
+A retry overwrites the same keys and column, so it's safe to repeat.
 
 ## Changes to existing code
 
@@ -70,4 +75,4 @@ Any error (unsupported type, broken file) raises, so the message is retried and 
 | --- | --- | --- |
 | 1. Parser contract | `MimeType`, `RawPage`, `Page`, `Parser`, `UnsupportedFileType`, `detect_mime`, registry | Detection of PDF/PNG/JPEG bytes; unknown bytes raise; registry lookup |
 | 2. Parsers | `PdfParser`, `ImageParser`, registered | Text page, image-only page, PNG output, page count |
-| 3. Worker wiring | S3 `get` + `page_key`, `documents.pages`, parse step in `process_document` | Worker parses and stores pages; broken file goes to the DLQ; end to end on the corpus (Title Report pages have `text = None`) |
+| 3. Worker wiring | S3 `get` + `page_key`, `documents.pages`, parse step in `process_document`, unsupported type fails immediately | Worker parses and stores pages; unsupported type → `failed` with no retry; broken file goes to the DLQ; end to end on the corpus (Title Report pages have `text = None`) |
