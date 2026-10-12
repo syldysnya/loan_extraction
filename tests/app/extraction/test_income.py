@@ -31,7 +31,7 @@ def _income(amount: float, period: tuple[date, date], kind: IncomeKind = IncomeK
 
 def _extraction(*income: IncomeEntry) -> DocumentExtraction:
     mention = BorrowerMention(
-        name="John", name_source=REF, ssn_last4=None, addresses=[], income=list(income), accounts=[]
+        name="John", name_source=REF, ssn_last4=None, ssn_source=None, addresses=[], income=list(income), accounts=[]
     )
     return DocumentExtraction(document_type=DocumentType.OTHER, borrowers=[mention])
 

@@ -51,6 +51,7 @@ class BorrowerMention(BaseModel):
     name: str
     name_source: SourceRef
     ssn_last4: str | None         # last 4 digits only, never the full SSN
+    ssn_source: SourceRef | None  # where the SSN appears
     addresses: list[Address]
     income: list[IncomeEntry]
     accounts: list[Account]
@@ -171,9 +172,9 @@ Prompts live in their own module, as named constants with builder functions:
 - `ssn_last4` always keeps the last 4 digits only, even if the model returns a full or masked SSN.
 - After the 3rd failure, raises `ExtractionFailed`.
 
-## Value verification (planned: PR 4)
+## Value verification (deferred)
 
-After validation, code checks that each value appears in the lines it cites (`LineIndex.resolve(ref).quote`):
+Deferred for now. The design: after validation, code checks that each value appears in the lines it cites (`LineIndex.resolve(ref).quote`):
 
 | Value | Found if |
 | --- | --- |
@@ -217,5 +218,5 @@ A re-run of a document replaces its mentions, so retries don't duplicate them.
 | --- | --- | --- |
 | 1. LLM clients + tracking | `Pricing`, `Usage`, `LLMClient`, `GeminiClient`, `OpenAIClient`, Hydra model configs, `TrackedModel`, `llm_calls`, `hatch run costs` | Cost formula; a row per call, including failures; costs totals. Fake client, no network. |
 | 2. Schema + extractor | Schema, `resolve`, request building, `extract` with 3 attempts, `ExtractionFailed`, `NonRetryableError`, `safe_error` | Valid output; unknown line number → retry; retry then success; 3 failures raise; `resolve` returns page, quote and boxes; `safe_error` never contains values |
-| 4. Value verification | Check each value against its cited lines; failures go through retry with feedback | Amount formats found; missing amount, account digits, SSN last 4 or name part rejected with field path and no value; real corpus extracts with no verification failures |
+| 4. Value verification (deferred) | Check each value against its cited lines; failures go through retry with feedback | Amount formats found; missing amount, account digits, SSN last 4 or name part rejected with field path and no value; real corpus extracts with no verification failures |
 | 3. Worker wiring | `borrower_mentions`, extraction in `process_document`, `safe_error` in the worker | Worker stores mentions; extraction failure fails at once. End to end on the corpus with both models (needs API keys). |
