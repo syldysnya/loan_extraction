@@ -5,7 +5,19 @@ from app import db
 from app.document_worker import DocumentWorker
 from app.local_s3 import LocalS3
 from app.local_sqs import LocalSQS
-from app.parsing.registry import REGISTRY
+from app.parsing.ocr import Ocr
+from app.parsing.parsers import ImageParser, PdfParser
+from app.parsing.registry import ParserRegistry
+from app.parsing.types import BBox, TextLine
+
+OCR_TEXT = "text read by OCR"
+
+
+class FakeOcr(Ocr):
+    """Returns one fixed line, so tests don't need the Tesseract binary."""
+
+    def read(self, image: bytes) -> list[TextLine]:
+        return [TextLine(text=OCR_TEXT, bbox=BBox(left=0.1, top=0.1, width=0.5, height=0.05))]
 
 
 def make_pdf(*page_texts: str) -> bytes:
@@ -44,8 +56,14 @@ def s3(tmp_path, queue):
 
 
 @pytest.fixture
-def worker(conn, queue, s3):
-    return DocumentWorker(conn, queue, s3, REGISTRY)
+def registry() -> ParserRegistry:
+    ocr = FakeOcr()
+    return ParserRegistry([PdfParser(ocr), ImageParser(ocr)])
+
+
+@pytest.fixture
+def worker(conn, queue, s3, registry):
+    return DocumentWorker(conn, queue, s3, registry)
 
 
 def statuses(conn) -> list[db.DocumentStatus]:
