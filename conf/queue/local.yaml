@@ -1,0 +1,4 @@
+_target_: app.local_sqs.LocalSQS
+queue_dir: queue
+visibility_timeout_s: 300
+max_receive_count: 3

@@ -36,6 +36,7 @@ All rows are inserted before any file is written.
 
 | Outcome | Action |
 | --- | --- |
+| Malformed (bad body or unknown `document_id`) | Delete the message. Redelivery can't fix it. |
 | Received | Set the document to `processing`. |
 | Success | Set the document to `done`, then delete the message. |
 | Exception | Set the document back to `queued`, save the error, and leave the message. It is retried after 5 min. |
@@ -67,6 +68,8 @@ Derived from the batch's documents, not stored:
 | Any `queued` or `processing` | `processing` |
 | All `done` or `failed` | `completed` |
 
-## Config (`conf/config.yaml`)
+## Config
 
-`s3_dir`, `queue_dir`, `db_path`, `visibility_timeout_s: 300`, `max_receive_count: 3`
+`conf/config.yaml`: `db_path`, `poll_interval_s`.
+
+The queue and S3 clients are built with Hydra `instantiate` from `conf/queue/local.yaml` and `conf/s3/local.yaml`. Moving to AWS means adding a new config file, not changing code.

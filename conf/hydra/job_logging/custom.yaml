@@ -1,0 +1,19 @@
+version: 1
+formatters:
+  plain:
+    (): app.log.PlainFormatter
+  json:
+    (): app.log.JsonFormatter
+handlers:
+  console:
+    class: logging.StreamHandler
+    formatter: plain
+    stream: ext://sys.stdout
+  file:
+    class: logging.FileHandler
+    formatter: json
+    filename: ${hydra.runtime.output_dir}/${hydra.job.name}.log
+root:
+  level: INFO
+  handlers: [console, file]
+disable_existing_loggers: false

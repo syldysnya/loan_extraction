@@ -1,0 +1,2 @@
+_target_: app.local_s3.LocalS3
+s3_dir: s3

@@ -1,0 +1,16 @@
+defaults:
+  - queue: local
+  - s3: local
+  - override hydra/job_logging: custom
+  - _self_
+
+db_path: loan.db
+poll_interval_s: 1
+
+folder: ???      # ingest
+batch_id: null   # redrive (optional)
+
+hydra:
+  run:
+    dir: log/${now:%Y-%m-%d}/${now:%H-%M-%S}
+  output_subdir: null
