@@ -67,6 +67,8 @@ The model is selected through Hydra config (`model=<name>`), so both can be run 
 
 Both models accept image input and support JSON schema output.
 
+A benchmark (each model's accuracy against labelled ground truth) will be added once there are more sample documents.
+
 ## Cross-cutting
 
 ### Failure handling
