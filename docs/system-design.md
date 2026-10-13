@@ -20,9 +20,10 @@ This system extracts unstructured borrower data from a corpus of loan documents 
 
 ## Corpus
 
-`data/loan_data/` contains 10 PDFs about the same household (John and Mary Homeowner):
+`data/loan_data/` contains 10 PDFs:
 
 - **Borrowers span documents.** Some documents cover John only, some cover both, so per-document extractions must be merged into one record per borrower.
+- **Not every document is about the same household.** Nine are about John and Mary Homeowner; the Title Report is about Robert and Andrea VanAssen, so they become separate borrowers.
 - **One document is scanned.** The Title Report has no text layer, so its text comes from OCR (Tesseract), and extraction also sees the page images.
 - **Income history has several sources:** 1040 + Schedule C, W-2, paystub and EVOE.
 
@@ -37,7 +38,7 @@ flowchart LR
     worker["<b>Document worker</b>"]
     llm["LLM"]
     db[("<b>SQLite</b><br/>documents<br/>borrower_mentions<br/>llm_calls<br/>borrowers")]
-    api["<b>Query API (FastAPI)</b><br/>GET /borrowers<br/>GET /borrowers/{id}"]
+    api["<b>Query API (FastAPI)</b><br/>GET /borrowers<br/>GET /borrowers/{id}<br/>GET /health"]
     client["Client"]
 
     upload -- "upload files" --> s3
@@ -48,13 +49,23 @@ flowchart LR
     worker -- "page images" --> s3
     worker -- "prompt + JSON schema" --> llm
     worker -- "fields, status<br/>queued → processing → done | failed" --> db
+    worker -- "batch finished:<br/>resolve borrowers" --> db
     api -- "read" --> db
     client -- "request" --> api
 ```
 
 ## Storage
 
-All state is kept in SQLite: `documents` (ingestion), `borrower_mentions` and `llm_calls` (extraction), and `borrowers` (resolution).
+All state is kept in SQLite:
+
+| Table | Written by | Holds |
+| --- | --- | --- |
+| `documents` | ingestion, parsing | file name, hash, status, safe error, document type, parsed page text |
+| `borrower_mentions` | extraction | each document's extracted borrower data, with sources |
+| `llm_calls` | extraction | tokens, cost, duration and error type per LLM call |
+| `borrowers` | resolution | one merged record per borrower, with sources and conflicts |
+
+Resolution runs in the worker once a batch has no `queued` or `processing` documents left, and can be rerun with `hatch run resolve`.
 
 ## Models
 
@@ -67,12 +78,16 @@ The model is selected through Hydra config (`model=<name>`), so both can be run 
 
 Both models accept image input and support JSON schema output.
 
+A benchmark (each model's accuracy against labelled ground truth) will be added once there are more sample documents.
+
 ## Cross-cutting
 
 ### Failure handling
 
 - **Success:** a message is removed from the queue only after the worker has committed its results.
-- **Failure:** the message is redelivered after a 5-minute visibility timeout. After 3 failed attempts, it moves to the DLQ and the document is marked `failed`.
+- **Retryable failure:** the message is redelivered after a 5-minute visibility timeout. After 3 failed attempts, it moves to the DLQ and the document is marked `failed`. `hatch run redrive` moves it back to the queue.
+- **Non-retryable failure:** an unsupported file type, or extraction failing all its LLM attempts. The document is marked `failed` at once and the message is deleted, with no DLQ round trip.
+- **Malformed message:** deleted, since redelivery can't fix it.
 - **Zero loss:** every document ends as `done` or `failed`, and any `failed` document can be found in the database.
 
 ### Logging
@@ -81,7 +96,7 @@ Both models accept image input and support JSON schema output.
   - **stdout:** plain one-line text, for following a run in the terminal.
   - **A file under `log/`:** JSON, for inspecting and parsing a run afterwards.
 - Each run gets its own file: `log/{YYYY-MM-DD}/{HH-MM-SS}/{process}.log`. This is Hydra's run-directory convention.
-- Each line carries `batch_id`, `document_id`, `stage` and `status`.
+- Each line carries the context it has: `stage`, `batch_id`, `document_id` and `status` from the pipeline, `request_id` from the API.
 - Logs contain IDs only, never PII values.
 
 ### PII
@@ -95,7 +110,7 @@ Both models accept image input and support JSON schema output.
 | Query API | Bound to `localhost`. |
 | Git | `data/`, `loan.db`, `s3/`, `queue/` and `log/` are ignored. |
 
-Known gaps, accepted for a local project: SQLite, `s3/` and page images are unencrypted on disk, and file names (which contain borrower names) are stored in `documents.filename` and S3 keys.
+Known gaps, accepted for a local project: SQLite (parsed page text, extracted mentions and borrower records), `s3/` and page images are unencrypted on disk, and file names (which contain borrower names) are stored in `documents.filename` and S3 keys.
 
 In production:
 
