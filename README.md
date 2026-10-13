@@ -31,15 +31,16 @@ A design document and this README, along with the other deliverables listed on t
 ### Prerequisites
 
 - Python 3.12 and [Hatch](https://hatch.pypa.io/)
-- Tesseract, for OCR of scanned pages: `brew install tesseract`
+- Tesseract, for OCR of scanned pages (macOS: `brew install tesseract`, Debian/Ubuntu: `apt install tesseract-ocr`)
 - A Gemini API key (or an OpenAI key, to run with `model=openai`)
 
-Save the key in the macOS Keychain once, then export it in each terminal that runs the worker:
+The worker reads the key from the `GOOGLE_API_KEY` (or `OPENAI_API_KEY`) environment variable. Keys are never written in code, config or `.env` files in the repo. Keep the key in a secret store (a password manager or the OS keychain) and export it in the terminal that runs the worker:
 
 ```bash
-security add-generic-password -a "$USER" -s GOOGLE_API_KEY -w          # prompts for the key
-export GOOGLE_API_KEY=$(security find-generic-password -a "$USER" -s GOOGLE_API_KEY -w)
+export GOOGLE_API_KEY=<your key>
 ```
+
+In production, the key lives in a secret manager (e.g. AWS Secrets Manager) and is injected into the worker's environment at runtime.
 
 ### Steps
 
